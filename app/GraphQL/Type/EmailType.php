@@ -18,6 +18,7 @@ class EmailType extends GraphQLType
     public function fields(): array
     {
         return [
+            'attachments' => ['type' => Type::listOf(\Rebing\GraphQL\Support\Facades\GraphQL::type('EmailAttachment'))],
             'hotline_id' => ['type' => Type::id()],
             'user_id' => ['type' => Type::id()],
             'uid' => ['type' => Type::id()],

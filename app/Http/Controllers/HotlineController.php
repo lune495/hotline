@@ -13,6 +13,11 @@ class HotlineController extends Controller
     private function validated(Request $request, ?Hotline $hotline = null): array
     {
         $data = $request->validate([
+            'smtp_host' => ['nullable', 'string', 'max:255', 'regex:/^[a-zA-Z0-9.-]+$/'],
+            'smtp_port' => ['sometimes', 'integer', 'between:1,65535'],
+            'smtp_encryption' => ['sometimes', Rule::in(['ssl', 'tls'])],
+            'smtp_username' => ['nullable', 'string', 'max:255'],
+            'smtp_password' => ['nullable', 'string', 'max:4096'],
             'nom' => ['required', 'string', 'max:255'],
             'host' => ['required', 'string', 'max:255', 'regex:/^[a-zA-Z0-9.-]+$/'],
             'port' => ['required', 'integer', 'between:1,65535'],
@@ -23,6 +28,7 @@ class HotlineController extends Controller
             'active' => ['required', 'boolean'],
         ]);
         if ($hotline && empty($data['password'])) { unset($data['password']); }
+        if ($hotline && empty($data['smtp_password'])) { unset($data['smtp_password']); }
         $duplicate = Hotline::where('host', $data['host'])->where('port', $data['port'])
             ->where('email', $data['email'])->where('folder', $data['folder']);
         if ($hotline) { $duplicate->where('id', '!=', $hotline->id); }

@@ -32,3 +32,9 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureAdmin::class])->gr
     Route::apiResource('users', \App\Http\Controllers\UserController::class);
     Route::get('/roles', fn () => response()->json(['data' => \App\Models\Role::orderBy('nom')->get()]));
 });
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/emails/send', [\App\Http\Controllers\MailDeliveryController::class, 'send'])->middleware('throttle:6,1');
+    Route::get('/emails/{email}/attachments', [\App\Http\Controllers\MailDeliveryController::class, 'attachments']);
+    Route::get('/attachments/{attachment}/download', [\App\Http\Controllers\MailDeliveryController::class, 'download']);
+});

@@ -36,7 +36,7 @@ class EmailQuery extends Query
         if (!$hotline || !$hotline->active) {
             return [];
         }
-        $query = Email::query()->where('hotline_id', $hotline->id);
+        $query = Email::query()->with('attachments')->where('hotline_id', $hotline->id);
 
         foreach (['id', 'uid', 'mail_destinatire', 'mail_emetteur', 'objet'] as $field) {
             if (isset($args[$field])) {

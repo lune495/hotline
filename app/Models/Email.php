@@ -24,6 +24,8 @@ class Email extends Model
         'cc',
     ];
 
+    public function attachments() { return $this->hasMany(EmailAttachment::class); }
+
     public function hotline(): BelongsTo
     {
         return $this->belongsTo(Hotline::class);

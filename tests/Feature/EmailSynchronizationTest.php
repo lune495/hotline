@@ -32,11 +32,17 @@ class EmailSynchronizationTest extends TestCase
         config(['imap.host' => 'imap.example.test', 'imap.username' => 'user@example.test', 'imap.password' => 'test']);
         (require database_path('migrations/2026_10_11_000002_add_user_id_to_emails_table.php'))->up();
         (require database_path('migrations/2026_10_12_000001_create_hotlines_and_associations.php'))->up();
+        (require database_path('migrations/2026_10_13_000001_add_mail_attachments_and_smtp.php'))->up();
+        \Illuminate\Support\Facades\Storage::fake('local');
         $hotline = Hotline::first();
         $role = Role::create(['nom' => 'admin']);
         $this->actingAs(User::create(['name' => 'Test', 'email' => 'admin@example.test', 'password' => 'password', 'role_id' => $role->id, 'hotline_id' => $hotline->id]));
 
         $message = Mockery::mock(Message::class);
+        $attachment = \Mockery::mock(\Webklex\PHPIMAP\Attachment::class);
+        $attachment->shouldReceive('getName')->andReturn('document.txt');
+        $attachment->shouldReceive('getContent')->andReturn('Document reçu');
+        $message->shouldReceive('getAttachments')->andReturn(new \Webklex\PHPIMAP\Support\AttachmentCollection([$attachment]));
         $message->shouldReceive('getUid')->andReturn(42);
         $message->shouldReceive('getTo', 'getFrom', 'getCc')->andReturn(new Attribute('address', []));
         $message->shouldReceive('getSubject')->andReturn(new Attribute('subject', 'Objet'));
@@ -65,6 +71,10 @@ class EmailSynchronizationTest extends TestCase
         $response = $controller->synchro_mails($manager);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame(1, Email::count());
+        $this->assertSame(1, \App\Models\EmailAttachment::count());
+        $saved = \App\Models\EmailAttachment::first();
+        $this->assertSame('Document reçu', \Illuminate\Support\Facades\Storage::disk('local')->get($saved->path));
+        $this->assertArrayNotHasKey('path', $response->getData(true)['emails'][0]['attachments'][0]);
         $this->assertSame($importerId, Email::first()->user_id);
         $this->assertSame('Réponse existante', Email::first()->reponse);
         $this->assertSame(42, $response->getData(true)['emails'][0]['uid']);

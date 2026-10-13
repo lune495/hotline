@@ -85,6 +85,7 @@ return [
             'types' => [
                 // ExampleType::class,
                 \App\GraphQL\Type\EmailType::class,
+                \App\GraphQL\Type\EmailAttachmentType::class,
             ],
 
             // Laravel HTTP middleware

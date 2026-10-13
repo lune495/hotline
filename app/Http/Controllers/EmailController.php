@@ -51,6 +51,7 @@ class EmailController extends Controller
             $rows = [];
             foreach ($messages as $message) {
                 $rows[] = [
+                    '_attachments' => $message->getAttachments(),
                     'user_id' => $user->id,
                     'hotline_id' => $hotline->id,
                     'uid' => $message->getUid(),
@@ -66,12 +67,15 @@ class EmailController extends Controller
 
             $emails = DB::transaction(function () use ($rows) {
                 return collect($rows)->map(function ($row) {
+                    $attachments = $row['_attachments'];
+                    unset($row['_attachments']);
                     $identity = array_intersect_key($row, array_flip(['hotline_id', 'uid', 'uid_validity', 'mailbox_key']));
                     // Preserve the original importer and any response entered in the application.
                     $email = Email::firstOrCreate($identity, $row);
                     unset($row['user_id']);
                     $email->fill($row)->save();
-                    return $email;
+                    app(\App\Services\IncomingAttachments::class)->store($email, $attachments);
+                    return $email->load('attachments');
                 });
             });
 

@@ -6,9 +6,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Hotline extends Model
 {
-    protected $fillable = ['nom', 'host', 'port', 'encryption', 'email', 'password', 'folder', 'active'];
-    protected $hidden = ['password'];
-    protected $casts = ['password' => 'encrypted', 'port' => 'integer', 'active' => 'boolean'];
+    protected $fillable = ['nom', 'host', 'port', 'encryption', 'email', 'password', 'folder', 'active', 'smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username', 'smtp_password'];
+    protected $hidden = ['password', 'smtp_password'];
+    protected $casts = ['smtp_password' => 'encrypted', 'smtp_port' => 'integer', 'password' => 'encrypted', 'port' => 'integer', 'active' => 'boolean'];
 
     public function users(): HasMany { return $this->hasMany(User::class); }
     public function emails(): HasMany { return $this->hasMany(Email::class); }
