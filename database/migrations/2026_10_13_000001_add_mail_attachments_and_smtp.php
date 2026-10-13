@@ -9,9 +9,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('hotlines', function (Blueprint $t) {
-            $t->string('smtp_host')->nullable();
-            $t->unsignedSmallInteger('smtp_port')->default(587);
-            $t->string('smtp_encryption')->default('tls');
             $t->string('smtp_username')->nullable();
             $t->text('smtp_password')->nullable();
         });
@@ -31,6 +28,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('email_attachments');
-        Schema::table('hotlines', fn (Blueprint $t) => $t->dropColumn(['smtp_host', 'smtp_port', 'smtp_encryption', 'smtp_username', 'smtp_password']));
+        Schema::table('hotlines', fn (Blueprint $t) => $t->dropColumn(['smtp_username', 'smtp_password']));
     }
 };
