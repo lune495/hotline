@@ -9,11 +9,17 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('hotlines', function (Blueprint $table) {
-            $table->string('smtp_host')->nullable();
-            $table->unsignedInteger('smtp_port')->default(587);
-            $table->string('smtp_encryption')->default('tls');
+            if (!Schema::hasColumn('hotlines', 'smtp_host')) {
+                $table->string('smtp_host')->nullable();
+            }
+            if (!Schema::hasColumn('hotlines', 'smtp_port')) {
+                $table->unsignedInteger('smtp_port')->default(587);
+            }
+            if (!Schema::hasColumn('hotlines', 'smtp_encryption')) {
+                $table->string('smtp_encryption')->default('tls');
+            }
         });
-        DB::table('hotlines')->where('host', 'pro3.mail.ovh.net')->update([
+        DB::table('hotlines')->where('host', 'pro3.mail.ovh.net')->whereNull('smtp_host')->update([
             'smtp_host' => 'pro3.mail.ovh.net', 'smtp_port' => 587, 'smtp_encryption' => 'tls',
         ]);
     }
