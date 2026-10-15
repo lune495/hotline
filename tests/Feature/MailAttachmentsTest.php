@@ -41,9 +41,44 @@ class MailAttachmentsTest extends TestCase
         });
         $payload = ['to' => ['client@example.test'], 'cc' => ['copy@example.test'], 'bcc' => ['hidden@example.test'], 'objet' => 'Document', 'contenu' => 'Bonjour'];
         $this->post('/api/emails/send', $payload + ['attachments' => [UploadedFile::fake()->createWithContent('document.txt', 'Bonjour')]], ['Accept' => 'application/json'])->assertOk();
+        $saved = Email::where('folder', 'sent')->firstOrFail();
+        $this->assertSame('sent', $saved->delivery_status);
+        $this->assertSame($user->hotline_id, $saved->hotline_id);
+        $this->assertSame('hidden@example.test', $saved->bcc);
+        $this->assertNotNull($saved->sent_at);
+        $attachment = $saved->attachments()->firstOrFail();
+        $this->assertSame('Bonjour', Storage::disk('local')->get($attachment->path));
+        $this->getJson('/api/emails/sent')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $saved->id);
+        $this->postJson('/graphql', ['query' => '{ emails { id } }'])->assertJsonPath('data.emails', []);
+        $this->postJson('/graphql', ['query' => '{ emails(folder: "sent") { id delivery_status attachments { id } } }'])
+            ->assertOk()->assertJsonPath('data.emails.0.id', (string) $saved->id)->assertJsonPath('data.emails.0.delivery_status', 'sent');
         $this->postJson('/api/emails/send', array_merge($payload, ['to' => ['incorrect']]))->assertUnprocessable();
         $this->post('/api/emails/send', $payload + ['attachments' => [UploadedFile::fake()->create('huge.pdf', 10241, 'application/pdf')]], ['Accept' => 'application/json'])->assertUnprocessable();
         $this->post('/api/emails/send', $payload + ['attachments' => [UploadedFile::fake()->createWithContent('script.php', '<?php echo 1;')]], ['Accept' => 'application/json'])->assertUnprocessable();
+    }
+
+    public function test_unconfirmed_smtp_is_preserved_but_not_listed_as_sent(): void
+    {
+        $user = $this->user();
+        $this->actingAs($user, 'sanctum');
+        $this->mock(OutgoingMail::class)->shouldReceive('send')->once()->andThrow(new \RuntimeException('SMTP unavailable'));
+        $this->postJson('/api/emails/send', ['to' => ['client@example.test'], 'objet' => 'Test', 'contenu' => 'Body'])->assertStatus(502);
+        $this->assertSame('unconfirmed', Email::firstOrFail()->delivery_status);
+        $this->getJson('/api/emails/sent')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_sent_messages_are_shared_only_with_the_same_hotline(): void
+    {
+        $user = $this->user();
+        $saved = Email::create(['hotline_id' => $user->hotline_id, 'user_id' => $user->id, 'folder' => 'sent', 'delivery_status' => 'sent', 'sent_at' => now(), 'mail_destinatire' => 'client@example.test', 'mail_emetteur' => 'support@example.test', 'objet' => 'Test', 'contenu' => 'Body']);
+        $colleague = User::create(['name' => 'Colleague', 'email' => 'colleague@example.test', 'password' => 'secret', 'hotline_id' => $user->hotline_id]);
+        $this->actingAs($colleague, 'sanctum');
+        $this->getJson('/api/emails/sent?id='.$saved->id)->assertOk()->assertJsonCount(1, 'data');
+        $otherHotline = Hotline::create(['nom' => 'Other', 'host' => 'imap.example.test', 'email' => 'other@example.test', 'password' => 'secret', 'active' => true]);
+        $colleague->update(['hotline_id' => $otherHotline->id]);
+        $this->actingAs($colleague->fresh(), 'sanctum');
+        $this->getJson('/api/emails/sent?id='.$saved->id)->assertOk()->assertJsonCount(0, 'data');
+        $this->postJson('/graphql', ['query' => '{ emails(folder: "sent") { id } }'])->assertJsonPath('data.emails', []);
     }
 
     public function test_outgoing_message_contains_files_and_bcc_without_network(): void

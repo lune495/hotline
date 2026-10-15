@@ -35,6 +35,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureAdmin::class])->gr
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/emails/send', [\App\Http\Controllers\MailDeliveryController::class, 'send'])->middleware('throttle:6,1');
+    Route::get('/emails/sent', [\App\Http\Controllers\MailDeliveryController::class, 'sent']);
     Route::get('/emails/{email}/attachments', [\App\Http\Controllers\MailDeliveryController::class, 'attachments']);
     Route::get('/attachments/{attachment}/download', [\App\Http\Controllers\MailDeliveryController::class, 'download']);
 });

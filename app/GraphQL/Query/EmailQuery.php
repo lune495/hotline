@@ -21,6 +21,7 @@ class EmailQuery extends Query
     public function args(): array
     {
         return [
+            'folder' => ['type' => Type::string(), 'rules' => ['in:inbox,sent']],
             'id' => ['type' => Type::int()],
             'uid' => ['type' => Type::id()],
             'mail_destinatire' => ['type' => Type::string()],
@@ -37,6 +38,11 @@ class EmailQuery extends Query
             return [];
         }
         $query = Email::query()->with('attachments')->where('hotline_id', $hotline->id);
+        $folder = $args['folder'] ?? 'inbox';
+        $query->where('folder', $folder);
+        if ($folder === 'sent') {
+            $query->where('delivery_status', 'sent');
+        }
 
         foreach (['id', 'uid', 'mail_destinatire', 'mail_emetteur', 'objet'] as $field) {
             if (isset($args[$field])) {
