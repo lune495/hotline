@@ -11,6 +11,7 @@ class Email extends Model
     use HasFactory;
 
     protected $fillable = [
+        'message_id', 'in_reply_to', 'references', 'reply_to', 'reply_to_email_id',
         'folder',
         'delivery_status',
         'bcc',
@@ -28,7 +29,7 @@ class Email extends Model
         'cc',
     ];
 
-    protected $casts = ['sent_at' => 'datetime'];
+    protected $casts = ['references' => 'array', 'sent_at' => 'datetime'];
 
     public function attachments() { return $this->hasMany(EmailAttachment::class); }
 

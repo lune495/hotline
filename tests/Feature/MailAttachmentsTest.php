@@ -13,6 +13,41 @@ use Tests\TestCase;
 
 class MailAttachmentsTest extends TestCase
 {
+    public function test_conversation_links_more_than_three_messages_without_using_subject(): void
+    {
+        $user = $this->user();
+        $this->actingAs($user, 'sanctum');
+        $base = ['hotline_id' => $user->hotline_id, 'mail_emetteur' => 'client@example.test', 'mail_destinatire' => 'support@example.test', 'objet' => 'Même objet', 'contenu' => 'Texte'];
+        $root = Email::create($base + ['message_id' => 'root@example.test']);
+        for ($i = 1; $i <= 4; $i++) {
+            Email::create($base + ['message_id' => 'child'.$i.'@example.test', 'in_reply_to' => $i === 1 ? 'root@example.test' : 'child'.($i - 1).'@example.test', 'references' => ['root@example.test']]);
+        }
+        Email::create($base + ['message_id' => 'unrelated@example.test']);
+        $this->getJson('/api/emails/'.$root->id.'/conversation')->assertOk()->assertJsonCount(5, 'data');
+    }
+
+    public function test_reply_context_thread_headers_and_cross_hotline_isolation(): void
+    {
+        $user = $this->user();
+        $parent = Email::create(['hotline_id' => $user->hotline_id, 'mail_emetteur' => 'sender@example.test', 'mail_destinatire' => 'support@example.test, colleague@example.test', 'reply_to' => 'reply@example.test', 'cc' => 'colleague@example.test, copy@example.test, SUPPORT@example.test', 'bcc' => 'private@example.test', 'objet' => 'Sujet', 'contenu' => 'Original', 'message_id' => 'parent@example.test', 'references' => ['root@example.test']]);
+        $this->actingAs($user, 'sanctum');
+        $this->getJson('/api/emails/'.$parent->id.'/reply-context?mode=reply')
+            ->assertOk()->assertJsonPath('data.to', ['reply@example.test'])->assertJsonPath('data.cc', [])->assertJsonPath('data.bcc', []);
+        $this->getJson('/api/emails/'.$parent->id.'/reply-context?mode=reply_all')
+            ->assertOk()->assertJsonPath('data.to', ['reply@example.test', 'colleague@example.test'])->assertJsonPath('data.cc', ['copy@example.test']);
+        $this->mock(OutgoingMail::class)->shouldReceive('send')->once()->withArgs(fn ($hotline, $data, $files) => $data['_headers']['in_reply_to'] === 'parent@example.test' && $data['_headers']['references'] === ['root@example.test', 'parent@example.test'] && $data['to'] === ['reply@example.test']);
+        $response = $this->postJson('/api/emails/send', ['reply_to_email_id' => $parent->id, 'reply_mode' => 'reply', 'objet' => 'Re: Sujet', 'contenu' => 'Réponse'])->assertOk();
+        $reply = Email::findOrFail($response->json('email.id'));
+        $this->assertNotEmpty($reply->message_id);
+        $this->assertSame($parent->id, $reply->reply_to_email_id);
+        $this->assertSame('parent@example.test', $reply->in_reply_to);
+        $this->getJson('/api/emails/'.$parent->id.'/conversation')->assertOk()->assertJsonCount(2, 'data');
+        $foreign = Email::create(['mail_emetteur' => 'other@example.test', 'mail_destinatire' => 'other@example.test', 'objet' => 'Other', 'contenu' => 'Private', 'message_id' => 'parent@example.test']);
+        $this->getJson('/api/emails/'.$foreign->id.'/reply-context')->assertNotFound();
+        $this->getJson('/api/emails/'.$foreign->id.'/conversation')->assertNotFound();
+        $this->postJson('/api/emails/send', ['reply_to_email_id' => $foreign->id, 'objet' => 'Re: Other', 'contenu' => 'Test'])->assertNotFound();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -91,11 +126,15 @@ class MailAttachmentsTest extends TestCase
         (new OutgoingMail)->send($user->hotline, [
             'to' => ['client@example.test'], 'cc' => ['copy@example.test'], 'bcc' => ['hidden@example.test'],
             'objet' => 'Document', 'contenu' => 'Bonjour',
+            '_headers' => ['message_id' => 'new@example.test', 'in_reply_to' => 'parent@example.test', 'references' => ['root@example.test', 'parent@example.test']],
         ], [$file]);
         $message = $mailer->getSymfonyTransport()->messages()->first()->getOriginalMessage();
         $this->assertSame('support@example.test', $message->getFrom()[0]->getAddress());
         $this->assertSame('hidden@example.test', $message->getBcc()[0]->getAddress());
         $this->assertSame('Bonjour', $message->getTextBody());
+        $this->assertSame('new@example.test', $message->getHeaders()->get('Message-ID')->getId());
+        $this->assertSame('parent@example.test', $message->getHeaders()->get('In-Reply-To')->getId());
+        $this->assertSame(['root@example.test', 'parent@example.test'], $message->getHeaders()->get('References')->getIds());
         $this->assertCount(1, $message->getAttachments());
         $this->assertSame('document.txt', $message->getAttachments()[0]->getFilename());
         $this->assertSame('Contenu du document', base64_decode($message->getAttachments()[0]->bodyToString()));

@@ -35,6 +35,7 @@ class EmailSynchronizationTest extends TestCase
         (require database_path('migrations/2026_10_13_000001_add_mail_attachments_and_smtp.php'))->up();
         \Illuminate\Support\Facades\Storage::fake('local');
         $hotline = Hotline::first();
+        (require database_path('migrations/2026_10_15_000002_add_email_thread_headers.php'))->up();
         $role = Role::create(['nom' => 'admin']);
         $this->actingAs(User::create(['name' => 'Test', 'email' => 'admin@example.test', 'password' => 'password', 'role_id' => $role->id, 'hotline_id' => $hotline->id]));
 
@@ -45,6 +46,9 @@ class EmailSynchronizationTest extends TestCase
         $message->shouldReceive('getAttachments')->andReturn(new \Webklex\PHPIMAP\Support\AttachmentCollection([$attachment]));
         $message->shouldReceive('getUid')->andReturn(42);
         $message->shouldReceive('getTo', 'getFrom', 'getCc')->andReturn(new Attribute('address', []));
+        $message->shouldReceive('getMessageId')->andReturn(new Attribute('message_id', 'incoming@example.test'));
+        $message->shouldReceive('getInReplyTo', 'getReferences')->andReturn(new Attribute('headers', []));
+        $message->shouldReceive('getReplyTo')->andReturn(new Attribute('reply_to', []));
         $message->shouldReceive('getSubject')->andReturn(new Attribute('subject', 'Objet'));
         $message->shouldReceive('getTextBody')->andReturn('Contenu');
 

@@ -39,3 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/emails/{email}/attachments', [\App\Http\Controllers\MailDeliveryController::class, 'attachments']);
     Route::get('/attachments/{attachment}/download', [\App\Http\Controllers\MailDeliveryController::class, 'download']);
 });
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/emails/{email}/reply-context', [\App\Http\Controllers\MailDeliveryController::class, 'replyContext']);
+    Route::get('/emails/{email}/conversation', [\App\Http\Controllers\MailDeliveryController::class, 'conversation']);
+});

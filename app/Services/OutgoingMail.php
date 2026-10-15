@@ -20,6 +20,10 @@ class OutgoingMail
         try {
             Mail::mailer('hotline')->raw($data['contenu'], function (Message $message) use ($hotline, $data, $files) {
                 $message->from($hotline->email, $hotline->nom)->to($data['to'])->subject($data['objet']);
+                $headers = $message->getSymfonyMessage()->getHeaders();
+                if (!empty($data['_headers']['message_id'])) { $headers->addIdHeader('Message-ID', $data['_headers']['message_id']); }
+                if (!empty($data['_headers']['in_reply_to'])) { $headers->addIdHeader('In-Reply-To', $data['_headers']['in_reply_to']); }
+                if (!empty($data['_headers']['references'])) { $headers->addIdHeader('References', $data['_headers']['references']); }
                 if (! empty($data['cc'])) {
                     $message->cc($data['cc']);
                 }

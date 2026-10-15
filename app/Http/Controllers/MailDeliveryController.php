@@ -17,7 +17,9 @@ class MailDeliveryController extends Controller
         $hotline = $request->user()->hotline;
         abort_unless($hotline && $hotline->active, 403, 'Aucune hotline active affectée à votre compte.');
         $data = $request->validate([
-            'to' => ['required', 'array', 'min:1', 'max:50'], 'to.*' => ['required', 'email', 'max:254'],
+            'reply_to_email_id' => ['sometimes', 'integer', 'min:1'],
+            'reply_mode' => ['sometimes', 'in:reply,reply_all'],
+            'to' => ['required_without:reply_to_email_id', 'array', 'min:1', 'max:50'], 'to.*' => ['required', 'email', 'max:254'],
             'cc' => ['sometimes', 'array', 'max:50'], 'cc.*' => ['required', 'email', 'max:254'],
             'bcc' => ['sometimes', 'array', 'max:50'], 'bcc.*' => ['required', 'email', 'max:254'],
             'objet' => ['required', 'string', 'max:255', 'not_regex:/[\r\n]/'],
@@ -25,6 +27,21 @@ class MailDeliveryController extends Controller
             'attachments' => ['sometimes', 'array', 'max:10'],
             'attachments.*' => ['required', 'file', 'max:10240', 'mimes:jpg,jpeg,png,gif,webp,bmp,tif,tiff,pdf,doc,docx,xls,xlsx,ppt,pptx,txt,csv,odt,ods,odp,zip'],
         ]);
+        $parent = null;
+        if (!empty($data['reply_to_email_id'])) {
+            $parent = Email::findOrFail($data['reply_to_email_id']);
+            $this->authorizeEmail($request, $parent);
+            abort_unless($parent->folder === 'inbox' || $parent->delivery_status === 'sent', 404);
+            $context = app(\App\Services\EmailReplies::class)->context($parent, $hotline, $data['reply_mode'] ?? 'reply');
+            $data['to'] = $data['to'] ?? $context['to'];
+            $data['cc'] = $data['cc'] ?? $context['cc'];
+            if (!$data['to']) { throw ValidationException::withMessages(['to' => 'Ajouter au moins un destinataire.']); }
+        } elseif (isset($data['reply_mode'])) {
+            throw ValidationException::withMessages(['reply_to_email_id' => 'Choisir le message auquel répondre.']);
+        }
+        $messageId = (string) \Illuminate\Support\Str::uuid().'@'.substr(strrchr($hotline->email, '@'), 1);
+        $references = $parent ? array_values(array_unique(array_merge($parent->references ?? [], array_filter([$parent->in_reply_to, $parent->message_id])))) : [];
+        $data['_headers'] = ['message_id' => $messageId, 'in_reply_to' => $parent?->message_id, 'references' => $references];
         if (count($data['to']) + count($data['cc'] ?? []) + count($data['bcc'] ?? []) > 50) {
             throw ValidationException::withMessages(['to' => 'Maximum 50 destinataires au total.']);
         }
@@ -41,6 +58,8 @@ class MailDeliveryController extends Controller
             $email = DB::transaction(function () use ($request, $hotline, $data, $files, &$paths) {
                 $email = Email::create([
                     'hotline_id' => $hotline->id, 'user_id' => $request->user()->id,
+                    'message_id' => $data['_headers']['message_id'], 'in_reply_to' => $data['_headers']['in_reply_to'],
+                    'references' => $data['_headers']['references'], 'reply_to_email_id' => $data['reply_to_email_id'] ?? null,
                     'folder' => 'sent', 'delivery_status' => 'pending',
                     'mail_emetteur' => $hotline->email,
                     'mail_destinatire' => implode(', ', $data['to']),
@@ -92,6 +111,21 @@ class MailDeliveryController extends Controller
         $query = Email::with('attachments')->where('hotline_id', $hotline->id)->where('folder', 'sent')->where('delivery_status', 'sent');
         if (isset($data['id'])) { $query->whereKey($data['id']); }
         return response()->json($query->orderByDesc('sent_at')->orderByDesc('id')->paginate(20));
+    }
+
+    public function replyContext(Request $request, Email $email, \App\Services\EmailReplies $replies)
+    {
+        $this->authorizeEmail($request, $email);
+        abort_unless($email->folder === 'inbox' || $email->delivery_status === 'sent', 404);
+        $data = $request->validate(['mode' => ['sometimes', 'in:reply,reply_all']]);
+        return response()->json(['data' => $replies->context($email, $request->user()->hotline, $data['mode'] ?? 'reply')]);
+    }
+
+    public function conversation(Request $request, Email $email, \App\Services\EmailReplies $replies)
+    {
+        $this->authorizeEmail($request, $email);
+        abort_unless($email->folder === 'inbox' || $email->delivery_status === 'sent', 404);
+        return response()->json(['data' => $replies->conversation($email)]);
     }
 
     private function authorizeEmail(Request $request, Email $email): void

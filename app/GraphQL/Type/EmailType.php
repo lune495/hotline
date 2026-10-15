@@ -18,6 +18,11 @@ class EmailType extends GraphQLType
     public function fields(): array
     {
         return [
+            'message_id' => ['type' => Type::string()],
+            'in_reply_to' => ['type' => Type::string()],
+            'references' => ['type' => Type::listOf(Type::string())],
+            'reply_to' => ['type' => Type::string()],
+            'reply_to_email_id' => ['type' => Type::id()],
             'folder' => ['type' => Type::string()],
             'delivery_status' => ['type' => Type::string()],
             'bcc' => ['type' => Type::string()],

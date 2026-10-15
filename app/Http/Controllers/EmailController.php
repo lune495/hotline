@@ -51,6 +51,10 @@ class EmailController extends Controller
             $rows = [];
             foreach ($messages as $message) {
                 $rows[] = [
+                    'message_id' => \App\Services\EmailReplies::ids((string) $message->getMessageId())[0] ?? null,
+                    'in_reply_to' => \App\Services\EmailReplies::ids((string) $message->getInReplyTo())[0] ?? null,
+                    'references' => \App\Services\EmailReplies::ids((string) $message->getReferences()),
+                    'reply_to' => $this->addresses($message->getReplyTo()) ?: null,
                     '_attachments' => $message->getAttachments(),
                     'user_id' => $user->id,
                     'hotline_id' => $hotline->id,

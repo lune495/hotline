@@ -68,6 +68,7 @@ class EmailAuthenticationTest extends TestCase
             '2026_10_12_000001_create_hotlines_and_associations.php',
             '2026_10_13_000001_add_mail_attachments_and_smtp.php',
             '2026_10_15_000001_add_sent_mail_fields_to_emails.php',
+            '2026_10_15_000002_add_email_thread_headers.php',
         ] as $migration) {
             (require database_path('migrations/'.$migration))->up();
         }
